@@ -20,7 +20,7 @@ import { ref, onValue, set as dbSet } from 'firebase/database';
 import { realtimeDb } from '../lib/Firebase';
 import KYCAlert from '../KYCAlert';
 
-import LocationPermissionModal from '../LocationPermissionModal';
+
 import { useNavigationReset } from '../../hooks/useNavigationReset';
 
 // TypeScript Interfaces
@@ -125,7 +125,6 @@ const VehicleDashboard = () => {
   // Location states
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [watchId, setWatchId] = useState<number | null>(null);
-  const [showLocationModal, setShowLocationModal] = useState<boolean>(false);
   const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean>(false);
 
   // Reset navigation guard when component successfully loads
@@ -143,35 +142,101 @@ const VehicleDashboard = () => {
   const [showOrderDetailsModal, setShowOrderDetailsModal] = useState<boolean>(false);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
 
-  // Show location permission modal on first login
+  // Request location permission directly on first login
   useEffect(() => {
     const userId = user?.id || user?.uid;
     if (!userId) return;
 
     // Check if location permission was already granted
-    const checkLocationPermission = async () => {
+    const checkAndRequestLocationPermission = async () => {
+      // Check localStorage first for user preference
+      const savedPermission = localStorage.getItem(`locationPermission_${userId}`);
+      
+      if (savedPermission === 'granted') {
+        setLocationPermissionGranted(true);
+        return;
+      }
+
       if ('permissions' in navigator) {
         try {
           const permission = await navigator.permissions.query({ name: 'geolocation' });
+          
           if (permission.state === 'granted') {
             setLocationPermissionGranted(true);
-            // Don't show modal if already granted
+            localStorage.setItem(`locationPermission_${userId}`, 'granted');
+          } else if (permission.state === 'denied') {
+            setLocationPermissionGranted(false);
+            localStorage.setItem(`locationPermission_${userId}`, 'denied');
           } else {
-            // Show modal for permission request
-            setShowLocationModal(true);
+            // Directly request location permission without modal
+            requestLocationDirectly();
           }
+
+          // Listen for permission changes
+          permission.addEventListener('change', () => {
+            if (permission.state === 'granted') {
+              setLocationPermissionGranted(true);
+              localStorage.setItem(`locationPermission_${userId}`, 'granted');
+            } else if (permission.state === 'denied') {
+              setLocationPermissionGranted(false);
+              localStorage.setItem(`locationPermission_${userId}`, 'denied');
+            }
+          });
         } catch (err) {
-          // Fallback: show modal
-          setShowLocationModal(true);
+          console.error('Error checking permissions:', err);
+          // Fallback: directly request location
+          if (!savedPermission || savedPermission !== 'denied') {
+            requestLocationDirectly();
+          }
         }
       } else {
-        // Fallback: show modal
-        setShowLocationModal(true);
+        // Fallback: directly request location
+        if (!savedPermission || savedPermission !== 'denied') {
+          requestLocationDirectly();
+        }
       }
     };
 
-    checkLocationPermission();
+    checkAndRequestLocationPermission();
   }, [user?.id, user?.uid]);
+
+  // Function to request location permission directly
+  const requestLocationDirectly = () => {
+    const userId = user?.id || user?.uid;
+    if (!userId || !navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setCurrentLocation({ lat: latitude, lng: longitude });
+        setLocationPermissionGranted(true);
+        localStorage.setItem(`locationPermission_${userId}`, 'granted');
+        
+        // Update initial location in Firebase
+        dbSet(ref(realtimeDb, `vehicles/${userId}/location`), {
+          lat: latitude,
+          lng: longitude,
+          timestamp: Date.now()
+        }).then(() => {
+          console.log('✅ Initial location updated successfully for vehicle:', userId);
+        }).catch((err) => {
+          console.error('❌ Error updating initial location in Firebase:', err);
+        });
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationPermissionGranted(false);
+          localStorage.setItem(`locationPermission_${userId}`, 'denied');
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
+  };
 
   // Start live tracking when permission is granted
   useEffect(() => {
@@ -179,41 +244,70 @@ const VehicleDashboard = () => {
     if (!userId || !locationPermissionGranted) return;
 
     let localWatchId: number | null = null;
+    let retryCount = 0;
+    const maxRetries = 3;
 
     const startLiveTracking = () => {
       if (!navigator.geolocation) {
-        setError('Geolocation is not supported by your browser.');
+        console.error('Geolocation is not supported by your browser.');
         return;
       }
 
       // Start live tracking
       localWatchId = navigator.geolocation.watchPosition(
         (position) => {
-          const { latitude, longitude } = position.coords;
+          const { latitude, longitude, accuracy } = position.coords;
           setCurrentLocation({ lat: latitude, lng: longitude });
+          retryCount = 0; // Reset retry count on successful location
 
-          // Update location in Firebase
-          dbSet(ref(realtimeDb, `vehicles/${userId}/location`), {
-            lat: latitude,
-            lng: longitude,
-            timestamp: Date.now()
-          }).then(() => {
-            console.log('🔄 Live location updated for vehicle:', userId, 'at', new Date().toLocaleTimeString());
-          }).catch((err) => {
-            console.error('❌ Error updating live location in Firebase:', err);
-          });
+          // Update location in Firebase with retry logic
+          const updateLocation = async (attempt = 1) => {
+            try {
+              await dbSet(ref(realtimeDb, `vehicles/${userId}/location`), {
+                lat: latitude,
+                lng: longitude,
+                accuracy: accuracy,
+                timestamp: Date.now()
+              });
+              console.log('🔄 Live location updated for vehicle:', userId, 'at', new Date().toLocaleTimeString());
+            } catch (err) {
+              console.error(`❌ Error updating live location (attempt ${attempt}):`, err);
+              if (attempt < 3) {
+                setTimeout(() => updateLocation(attempt + 1), 2000 * attempt);
+              }
+            }
+          };
+
+          updateLocation();
         },
         (error) => {
           console.error('Error watching position:', error);
+          retryCount++;
+
           if (error.code === error.PERMISSION_DENIED) {
             setLocationPermissionGranted(false);
-            setShowLocationModal(true);
+            localStorage.setItem(`locationPermission_${userId}`, 'denied');
+            console.log('Location permission denied, stopping tracking');
+          } else if (error.code === error.POSITION_UNAVAILABLE) {
+            console.log('Location unavailable, will retry...');
+            if (retryCount < maxRetries) {
+              setTimeout(() => {
+                console.log(`Retrying location request (${retryCount}/${maxRetries})`);
+              }, 5000);
+            }
+          } else if (error.code === error.TIMEOUT) {
+            console.log('Location request timeout, will retry...');
+            if (retryCount < maxRetries) {
+              setTimeout(() => {
+                console.log(`Retrying location request (${retryCount}/${maxRetries})`);
+              }, 3000);
+            }
           }
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0 // Always fetch fresh location for live tracking
+          timeout: 15000, // Increased timeout
+          maximumAge: 30000 // Allow cached location for 30 seconds
         }
       );
 
@@ -503,43 +597,22 @@ const VehicleDashboard = () => {
     }
   };
 
-  // Location permission modal handlers
-  const handleLocationPermissionGranted = (location: { lat: number; lng: number }) => {
-    setCurrentLocation(location);
-    setLocationPermissionGranted(true);
-    setShowLocationModal(false);
-    
-    // Update initial location in Firebase
-    const userId = user?.id || user?.uid;
-    if (userId) {
-      dbSet(ref(realtimeDb, `vehicles/${userId}/location`), {
-        lat: location.lat,
-        lng: location.lng,
-        timestamp: Date.now()
-      }).then(() => {
-        console.log('✅ Initial location updated successfully for vehicle:', userId);
-      }).catch((err) => {
-        console.error('❌ Error updating initial location in Firebase:', err);
-      });
-    }
-  };
-
   // Handle showing order details from notification
   const handleShowOrderDetails = (notification: Notification) => {
     setSelectedNotification(notification);
     setShowOrderDetailsModal(true);
   };
 
-  const handleLocationPermissionDenied = () => {
-    setLocationPermissionGranted(false);
-    setError('Location permission is required for delivery tracking. Please enable location access to continue.');
-  };
-
-  const handleLocationModalClose = () => {
-    setShowLocationModal(false);
-    if (!locationPermissionGranted) {
-      setError('Location permission is required for optimal delivery tracking.');
+  // Add retry function for location permission
+  const retryLocationPermission = () => {
+    const userId = user?.id || user?.uid;
+    if (userId) {
+      // Clear saved permission state to allow fresh request
+      localStorage.removeItem(`locationPermission_${userId}`);
     }
+    setLocationPermissionGranted(false);
+    // Directly request location permission
+    requestLocationDirectly();
   };
 
   // Call functionality
@@ -599,7 +672,7 @@ const VehicleDashboard = () => {
                 </div>
               ) : (
                 <button
-                  onClick={() => setShowLocationModal(true)}
+                  onClick={retryLocationPermission}
                   className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-yellow-100 transition-colors"
                 >
                   <AlertTriangle className="h-4 w-4" />
@@ -650,7 +723,7 @@ const VehicleDashboard = () => {
                 </div>
               </div>
               <button
-                onClick={() => setShowLocationModal(true)}
+                onClick={retryLocationPermission}
                 className="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors font-medium"
               >
                 Enable Now
@@ -1165,14 +1238,7 @@ const VehicleDashboard = () => {
         </div>
       </div>
       
-      {/* Location Permission Modal */}
-      <LocationPermissionModal
-        isOpen={showLocationModal}
-        onClose={handleLocationModalClose}
-        onPermissionGranted={handleLocationPermissionGranted}
-        onPermissionDenied={handleLocationPermissionDenied}
-        userRole="vehicle_owner"
-      />
+
 
       {/* Order Details Modal */}
       {showOrderDetailsModal && selectedNotification && selectedNotification.deliveryDetails && (
