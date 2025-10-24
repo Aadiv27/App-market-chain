@@ -47,7 +47,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ref, onValue, off } from 'firebase/database';
 import { realtimeDb } from '../lib/Firebase';
 import KYCAlert from '../KYCAlert';
-import AIOnboardingChecklist from '../AIOnboardingChecklist';
+
 import VehicleLocationTracker from '../VehicleLocationTracker';
 import UserManagementModal from '../AdminModals/UserManagementModal';
 import OrderManagementModal from '../AdminModals/OrderManagementModal';
@@ -1852,9 +1852,6 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div>
-      
-      {/* AI Onboarding Checklist */}
-      <AIOnboardingChecklist />
 
       {/* Export Error Display */}
       {exportError && (

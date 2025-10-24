@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Truck, BarChart3, LogOut, ChevronDown, Bot } from 'lucide-react';
+import { Menu, X, Truck, BarChart3, LogOut, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -16,7 +16,6 @@ const Header = () => {
     { path: '/', label: 'Home', icon: null },
     { path: '/about', label: 'About', icon: null },
     { path: '/contact', label: 'Contact', icon: null },
-    { path: '/ai-features', label: 'AI Features', icon: Bot },
     { path: '/dashboard', label: 'Dashboard', icon: BarChart3 }
   ];
 

@@ -22,7 +22,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ref, onValue, set as dbSet, get } from 'firebase/database';
 import { realtimeDb } from '../lib/Firebase';
 import KYCAlert from '../KYCAlert';
-import AIOnboardingChecklist from '../AIOnboardingChecklist';
+
 import { WholesalerDataService } from '../../services/wholesalerDataService';
 import RetailerOrdersView from '../RetailerOrdersView';
 import { DistanceService } from '../../services/distanceService';
@@ -1210,9 +1210,6 @@ const WholesalerDashboard = () => {
           </div>
         </div>
       </div>
-      
-      {/* AI Onboarding Checklist */}
-      <AIOnboardingChecklist />
 
       {/* Add Product Modal */}
       {showAddProduct && (

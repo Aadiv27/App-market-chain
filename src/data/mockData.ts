@@ -27,20 +27,20 @@ export const testimonials = [
 
 export const teamMembers = [
   {
-    name: "Aadiv raj pandey",
+    name: "Satyam tiwari",
     role: "Founder & CEO",
-    avatar: "https://images.pexels.com/photos/1043474/pexels-photo-1043474.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop",
+    avatar: "https://media.licdn.com/dms/image/v2/D4D03AQHNG8w_2FIMQg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1675543679656?e=1762992000&v=beta&t=U-r911YmcHgKIUhV9sXGgQ6YCqX8fXB2Nzs0sCTi-qQ",
     bio: "Rural commerce expert with 10+ years in logistics"
   },
   {
-    name: "Priya Singh",
-    role: "Product Head",
-    avatar: "https://images.pexels.com/photos/1181686/pexels-photo-1181686.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop",
+    name: "Aadiv raj pandey",
+    role: "CTO",
+    avatar: "https://media.licdn.com/dms/image/v2/D4D03AQF7awa55ZAM1g/profile-displayphoto-scale_400_400/B4DZhio5hqGgAg-/0/1754001548704?e=1762992000&v=beta&t=vZi42kjn9pl_9foMNtcwlx3yJrXsACVl7MsSy7WlGHw",
     bio: "AI/ML specialist focused on rural market solutions"
   },
   {
-    name: "Rajesh Gupta",
-    role: "Community Lead",
+    name: "Aman kumar",
+    role: "CMO",
     avatar: "https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop",
     bio: "Building trust networks across tier-3 cities"
   }

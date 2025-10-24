@@ -19,7 +19,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ref, onValue, set as dbSet } from 'firebase/database';
 import { realtimeDb } from '../lib/Firebase';
 import KYCAlert from '../KYCAlert';
-import AIOnboardingChecklist from '../AIOnboardingChecklist';
+
 import LocationPermissionModal from '../LocationPermissionModal';
 import { useNavigationReset } from '../../hooks/useNavigationReset';
 
@@ -1164,9 +1164,6 @@ const VehicleDashboard = () => {
           </div>
         </div>
       </div>
-      
-      {/* AI Onboarding Checklist */}
-      <AIOnboardingChecklist />
       
       {/* Location Permission Modal */}
       <LocationPermissionModal

@@ -22,7 +22,7 @@ import {
 import { ref, onValue, set as dbSet, push } from 'firebase/database';
 import { realtimeDb } from '../lib/Firebase';
 import KYCAlert from '../KYCAlert';
-import AIOnboardingChecklist from '../AIOnboardingChecklist';
+
 import { useNavigationReset } from '../../hooks/useNavigationReset';
 
 // Define interfaces for type safety
@@ -1071,8 +1071,6 @@ const RetailerDashboard = React.memo(() => {
         </motion.div>
       )}
 
-      {/* AI Onboarding Checklist */}
-      <AIOnboardingChecklist />
     </div>
   );
 });

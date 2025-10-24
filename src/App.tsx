@@ -10,7 +10,6 @@ import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
 import JoinRetailerPage from './pages/JoinRetailerPage';
 import JoinAdminPage from './pages/JoinAdminPage';
-import AIFeaturesPage from './pages/AIFeaturesPage';
 import TestPage from './pages/TestPage';
 import TestVehiclePage from './pages/TestVehiclePage';
 import SimpleVehiclePage from './pages/SimpleVehiclePage';
@@ -42,7 +41,6 @@ function App() {
               <Route path="/test-data" element={<TestDataSeeder />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="/contact" element={<ContactPage />} />
-              <Route path="/ai-features" element={<AIFeaturesPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/join-retailer" element={<JoinRetailerPage />} />
               <Route path="/join-vehicle" element={<JoinVehiclePageFixed />} />

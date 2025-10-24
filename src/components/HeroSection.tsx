@@ -125,7 +125,7 @@ const HeroSection = () => {
                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 2 }}
                 className="absolute -bottom-4 -left-4 bg-[#5DAE49] text-white px-4 py-2 rounded-xl shadow-lg font-semibold text-sm"
               >
-                AI-Powered
+                market chain
               </motion.div>
             </div>
           </motion.div>

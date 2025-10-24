@@ -13,8 +13,7 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/database', 'firebase/storage'],
-          ui: ['framer-motion', 'lucide-react'],
-          ai: ['@google/generative-ai']
+          ui: ['framer-motion', 'lucide-react']
         }
       }
     },
