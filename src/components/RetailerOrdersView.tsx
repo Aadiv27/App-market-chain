@@ -13,11 +13,17 @@ import {
   Search,
   Filter,
   Download,
-  RefreshCw
+  RefreshCw,
+  Bell,
+  BellOff,
+  Truck,
+  CheckCircle
 } from 'lucide-react';
-import { ref, onValue, get } from 'firebase/database';
+import { ref, onValue, get, set } from 'firebase/database';
 import { realtimeDb } from './lib/Firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { DistanceService } from '../services/distanceService';
+import { NotificationService } from '../services/notificationService';
 
 interface RetailerInfo {
   id: string;
@@ -55,9 +61,10 @@ interface Order {
 
 interface RetailerOrdersViewProps {
   onClose: () => void;
+  onNotificationCountChange?: (count: number) => void;
 }
 
-const RetailerOrdersView: React.FC<RetailerOrdersViewProps> = ({ onClose }) => {
+const RetailerOrdersView: React.FC<RetailerOrdersViewProps> = ({ onClose, onNotificationCountChange }) => {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [retailersInfo, setRetailersInfo] = useState<Record<string, RetailerInfo>>({});
@@ -66,6 +73,9 @@ const RetailerOrdersView: React.FC<RetailerOrdersViewProps> = ({ onClose }) => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
+  const [viewedOrders, setViewedOrders] = useState<Set<string>>(new Set());
+  const [newOrdersCount, setNewOrdersCount] = useState(0);
+  const [packingOrders, setPackingOrders] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchOrdersAndRetailers = async () => {
@@ -97,11 +107,19 @@ const RetailerOrdersView: React.FC<RetailerOrdersViewProps> = ({ onClose }) => {
                 
                 if (userSnapshot.exists()) {
                   const userData = userSnapshot.val();
+                  
+                  // Enhanced phone number retrieval - try multiple field variations
+                  const phoneNumber = userData.phoneNumber || 
+                                    userData.phone || 
+                                    userData.mobileNumber || 
+                                    userData.mobile || 
+                                    '';
+                  
                   retailersInfoMap[retailerId] = {
                     id: retailerId,
                     name: userData.fullName || userData.name || 'Unknown Retailer',
                     email: userData.email || '',
-                    phone: userData.phoneNumber || userData.phone || '',
+                    phone: phoneNumber,
                     shopName: userData.shopName || userData.businessName || '',
                     shopAddress: userData.address || userData.businessAddress || '',
                     fullName: userData.fullName || userData.name || '',
@@ -154,6 +172,43 @@ const RetailerOrdersView: React.FC<RetailerOrdersViewProps> = ({ onClose }) => {
     fetchOrdersAndRetailers();
   }, [user?.id, user?.uid]);
 
+  // Load viewed orders from localStorage on component mount
+  useEffect(() => {
+    const wholesalerId = user?.id || user?.uid;
+    if (wholesalerId) {
+      const viewedOrdersKey = `viewedOrders_${wholesalerId}`;
+      const savedViewedOrders = localStorage.getItem(viewedOrdersKey);
+      if (savedViewedOrders) {
+        try {
+          const parsedViewedOrders = JSON.parse(savedViewedOrders);
+          setViewedOrders(new Set(parsedViewedOrders));
+        } catch (error) {
+          console.error('Error parsing viewed orders from localStorage:', error);
+        }
+      }
+    }
+  }, [user?.id, user?.uid]);
+
+  // Update notification count when orders or viewed orders change
+  useEffect(() => {
+    const unviewedCount = orders.filter(order => !viewedOrders.has(order.id)).length;
+    setNewOrdersCount(unviewedCount);
+    if (onNotificationCountChange) {
+      onNotificationCountChange(unviewedCount);
+    }
+  }, [orders, viewedOrders, onNotificationCountChange]);
+
+  // Save viewed orders to localStorage
+  const saveViewedOrders = (newViewedOrders: Set<string>) => {
+    const wholesalerId = user?.id || user?.uid;
+    if (wholesalerId) {
+      const viewedOrdersKey = `viewedOrders_${wholesalerId}`;
+      localStorage.setItem(viewedOrdersKey, JSON.stringify(Array.from(newViewedOrders)));
+      // Dispatch custom event to notify other components
+      window.dispatchEvent(new CustomEvent('viewedOrdersChanged'));
+    }
+  };
+
   const filteredOrders = orders.filter(order => {
     const retailer = retailersInfo[order.retailerId];
     const matchesSearch = !searchQuery || 
@@ -181,6 +236,14 @@ const RetailerOrdersView: React.FC<RetailerOrdersViewProps> = ({ onClose }) => {
   const handleViewOrder = (order: Order) => {
     setSelectedOrder(order);
     setShowOrderDetails(true);
+    
+    // Mark order as viewed
+    if (!viewedOrders.has(order.id)) {
+      const newViewedOrders = new Set(viewedOrders);
+      newViewedOrders.add(order.id);
+      setViewedOrders(newViewedOrders);
+      saveViewedOrders(newViewedOrders);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -201,6 +264,155 @@ const RetailerOrdersView: React.FC<RetailerOrdersViewProps> = ({ onClose }) => {
     return new Set(filteredOrders.map(order => order.retailerId)).size;
   };
 
+  const markAllAsRead = () => {
+    const allOrderIds = orders.map(order => order.id);
+    const newViewedOrders = new Set(allOrderIds);
+    setViewedOrders(newViewedOrders);
+    saveViewedOrders(newViewedOrders);
+  };
+
+  // Handler for marking order as packed
+  const handleMarkAsPacked = async (order: Order) => {
+    if (!order.id) {
+      alert('Order ID is missing');
+      return;
+    }
+
+    try {
+      // Add to packing orders to show loading state
+      setPackingOrders(prev => new Set(prev).add(order.id!));
+
+      const userId = user?.id || user?.uid;
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+
+      // Get retailer information from database - with enhanced phone number retrieval
+      const retailerRef = ref(realtimeDb, `users/${order.retailerId}`);
+      const retailerSnapshot = await get(retailerRef);
+      const retailerData = retailerSnapshot.val();
+      
+      // Try multiple phone number field variations
+      const retailerPhone = retailerData?.phoneNumber || 
+                           retailerData?.phone || 
+                           retailerData?.mobileNumber || 
+                           retailerData?.mobile || 
+                           retailersInfo[order.retailerId]?.phone || 
+                           '';
+      
+      let retailerInfo = {
+        name: order.retailerName || retailerData?.fullName || retailerData?.name || 'Retailer',
+        shopName: retailerData?.shopName || retailerData?.businessName || retailersInfo[order.retailerId]?.shopName || 'Retailer Shop',
+        address: retailerData?.address || retailerData?.businessAddress || retailersInfo[order.retailerId]?.shopAddress || retailersInfo[order.retailerId]?.address || 'Address not provided',
+        phone: retailerPhone,
+        email: retailerData?.email || retailersInfo[order.retailerId]?.email || ''
+      };
+
+      // Get wholesaler information
+      const wholesalerRef = ref(realtimeDb, `users/${userId}`);
+      const wholesalerSnapshot = await get(wholesalerRef);
+      const wholesalerData = wholesalerSnapshot.val();
+      
+      // Try multiple phone number field variations for wholesaler
+      const wholesalerPhone = wholesalerData?.phoneNumber || 
+                             wholesalerData?.phone || 
+                             wholesalerData?.mobileNumber || 
+                             wholesalerData?.mobile || 
+                             '';
+      
+      const wholesalerInfo = {
+        fullName: wholesalerData?.fullName || wholesalerData?.name || 'Wholesaler',
+        shopName: wholesalerData?.businessName || wholesalerData?.shopName || 'Wholesaler Shop',
+        address: wholesalerData?.address || wholesalerData?.businessAddress || 'Address not provided',
+        phone: wholesalerPhone
+      };
+
+      // Calculate distance and delivery cost
+      const distanceResult = await DistanceService.calculateDistance(
+        wholesalerInfo.address,
+        retailerInfo.address
+      );
+
+      // Update order status to "Packed"
+      const updatedOrder = {
+        ...order,
+        status: 'Packed' as const,
+        currentStatus: 'packed',
+        packedAt: Date.now(),
+        deliveryDistance: distanceResult.distance,
+        deliveryCost: distanceResult.cost,
+        retailerShopName: retailerInfo.shopName,
+        retailerAddress: retailerInfo.address,
+        retailerPhone: retailerInfo.phone
+      };
+
+      // Update in database
+      await NotificationService.updateOrderStatus(
+        userId,
+        order.id,
+        'Packed',
+        updatedOrder
+      );
+
+      // Notify ALL vehicle owners about the new delivery opportunity
+      await NotificationService.notifyVehicleOwners({
+        orderId: order.id,
+        retailer: {
+          name: retailerInfo.name,
+          shopName: retailerInfo.shopName,
+          address: retailerInfo.address,
+          phone: retailerInfo.phone,
+          email: retailerInfo.email
+        },
+        wholesaler: {
+          name: wholesalerInfo.fullName,
+          shopName: wholesalerInfo.shopName,
+          address: wholesalerInfo.address,
+          phone: wholesalerInfo.phone
+        },
+        distance: distanceResult.distance,
+        deliveryCost: distanceResult.cost,
+        orderAmount: order.total || 0,
+        items: Array.isArray(order.items) ? order.items.map(item => item.name).join(', ') : 'Various items'
+      });
+
+      // Log activity
+      await NotificationService.logActivity(
+        userId,
+        'wholesaler',
+        user?.name || 'Wholesaler',
+        `Marked order ${order.id} as packed and notified all vehicle owners`,
+        `Distance: ${distanceResult.distance}km, Cost: ₹${distanceResult.cost}`
+      );
+
+      // Update local state
+      setOrders(prev => 
+        prev.map(o => o.id === order.id ? updatedOrder : o)
+      );
+
+      // Mark order as viewed when packed (since it's been processed)
+      if (!viewedOrders.has(order.id)) {
+        const newViewedOrders = new Set(viewedOrders);
+        newViewedOrders.add(order.id);
+        setViewedOrders(newViewedOrders);
+        saveViewedOrders(newViewedOrders);
+      }
+
+      alert(`Order marked as packed! All vehicle owners have been notified. Distance: ${distanceResult.distance}km, Cost: ₹${distanceResult.cost}`);
+
+    } catch (error) {
+      console.error('Error marking order as packed:', error);
+      alert(`Failed to mark order as packed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      // Remove from packing orders
+      setPackingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(order.id!);
+        return newSet;
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -215,105 +427,126 @@ const RetailerOrdersView: React.FC<RetailerOrdersViewProps> = ({ onClose }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col"
+        className="bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-7xl h-[95vh] sm:h-[90vh] flex flex-col"
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div>
-            <h2 className="text-2xl font-bold text-[#0D1B2A]">Retailer Orders</h2>
-            <p className="text-gray-600">View all orders from your retailers</p>
+        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-200">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <h2 className="text-xl sm:text-2xl font-bold text-[#0D1B2A]">Retailer Orders</h2>
+              {newOrdersCount > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap">
+                    {newOrdersCount} New
+                  </span>
+                  <button
+                    onClick={markAllAsRead}
+                    className="text-xs sm:text-sm text-[#5DAE49] hover:text-green-600 font-medium flex items-center space-x-1"
+                    title="Mark all as read"
+                  >
+                    <BellOff className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">Mark All Read</span>
+                    <span className="sm:hidden">Read All</span>
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="text-gray-600 text-sm sm:text-base mt-1">View all orders from your retailers</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0 ml-2"
           >
-            <X className="h-6 w-6 text-gray-500" />
+            <X className="h-5 w-5 sm:h-6 sm:w-6 text-gray-500" />
           </button>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 border-b border-gray-200">
-          <div className="bg-blue-50 rounded-lg p-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 p-4 sm:p-6 border-b border-gray-200">
+          <div className="bg-blue-50 rounded-lg p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-blue-600 text-sm font-medium">Total Orders</p>
-                <p className="text-2xl font-bold text-blue-900">{filteredOrders.length}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-blue-600 text-xs sm:text-sm font-medium">Total Orders</p>
+                <p className="text-lg sm:text-2xl font-bold text-blue-900">{filteredOrders.length}</p>
               </div>
-              <ShoppingCart className="h-8 w-8 text-blue-500" />
+              <ShoppingCart className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500 flex-shrink-0" />
             </div>
           </div>
           
-          <div className="bg-green-50 rounded-lg p-4">
+          <div className="bg-green-50 rounded-lg p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-green-600 text-sm font-medium">Total Value</p>
-                <p className="text-2xl font-bold text-green-900">₹{getTotalOrderValue().toLocaleString()}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-green-600 text-xs sm:text-sm font-medium">Total Value</p>
+                <p className="text-lg sm:text-2xl font-bold text-green-900">₹{getTotalOrderValue().toLocaleString()}</p>
               </div>
-              <DollarSign className="h-8 w-8 text-green-500" />
+              <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-green-500 flex-shrink-0" />
             </div>
           </div>
           
-          <div className="bg-purple-50 rounded-lg p-4">
+          <div className="bg-purple-50 rounded-lg p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-purple-600 text-sm font-medium">Active Retailers</p>
-                <p className="text-2xl font-bold text-purple-900">{getUniqueRetailersCount()}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-purple-600 text-xs sm:text-sm font-medium">Active Retailers</p>
+                <p className="text-lg sm:text-2xl font-bold text-purple-900">{getUniqueRetailersCount()}</p>
               </div>
-              <User className="h-8 w-8 text-purple-500" />
+              <User className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500 flex-shrink-0" />
             </div>
           </div>
           
-          <div className="bg-orange-50 rounded-lg p-4">
+          <div className="bg-orange-50 rounded-lg p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-orange-600 text-sm font-medium">Pending Orders</p>
-                <p className="text-2xl font-bold text-orange-900">
+              <div className="min-w-0 flex-1">
+                <p className="text-orange-600 text-xs sm:text-sm font-medium">Pending Orders</p>
+                <p className="text-lg sm:text-2xl font-bold text-orange-900">
                   {filteredOrders.filter(o => o.currentStatus === 'pending').length}
                 </p>
               </div>
-              <Package className="h-8 w-8 text-orange-500" />
+              <Package className="h-6 w-6 sm:h-8 sm:w-8 text-orange-500 flex-shrink-0" />
             </div>
           </div>
         </div>
 
         {/* Search and Filter */}
-        <div className="flex flex-col md:flex-row gap-4 p-6 border-b border-gray-200">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-4 sm:p-6 border-b border-gray-200">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 sm:h-5 sm:w-5" />
             <input
               type="text"
               placeholder="Search by retailer name, shop name, or order ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5DAE49] focus:border-transparent"
+              className="w-full pl-9 sm:pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5DAE49] focus:border-transparent text-sm sm:text-base"
             />
           </div>
           
-          <div className="relative">
-            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5DAE49] focus:border-transparent appearance-none bg-white min-w-[150px]"
-            >
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="shipped">Shipped</option>
-              <option value="delivered">Delivered</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
+          <div className="flex gap-2 sm:gap-3">
+            <div className="relative flex-1 sm:flex-none">
+              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 sm:h-5 sm:w-5" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full sm:w-auto pl-9 sm:pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5DAE49] focus:border-transparent appearance-none bg-white text-sm sm:text-base sm:min-w-[150px]"
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="shipped">Shipped</option>
+                <option value="delivered">Delivered</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            
+            <button className="px-3 sm:px-4 py-2 bg-[#5DAE49] text-white rounded-lg hover:bg-green-600 transition-colors flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base whitespace-nowrap">
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Export</span>
+              <span className="sm:hidden">Export</span>
+            </button>
           </div>
-          
-          <button className="px-4 py-2 bg-[#5DAE49] text-white rounded-lg hover:bg-green-600 transition-colors flex items-center space-x-2">
-            <Download className="h-4 w-4" />
-            <span>Export</span>
-          </button>
         </div>
 
         {/* Orders Table */}
@@ -348,10 +581,18 @@ const RetailerOrdersView: React.FC<RetailerOrdersViewProps> = ({ onClose }) => {
                 <tbody>
                   {filteredOrders.map((order) => {
                     const retailer = retailersInfo[order.retailerId];
+                    const isNewOrder = !viewedOrders.has(order.id);
                     return (
-                      <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <tr key={order.id} className={`border-b border-gray-100 hover:bg-gray-50 ${isNewOrder ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}`}>
                         <td className="py-3 px-4 font-medium text-[#0D1B2A]">
-                          {order.trackingId || order.id}
+                          <div className="flex items-center space-x-2">
+                            <span>{order.trackingId || order.id}</span>
+                            {isNewOrder && (
+                              <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
+                                NEW
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4">
                           <div>
@@ -521,6 +762,34 @@ const RetailerOrdersView: React.FC<RetailerOrdersViewProps> = ({ onClose }) => {
                       </div>
                     ) : (
                       <p className="text-gray-500">No item details available</p>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="border-t pt-6 flex justify-end space-x-3">
+                    {selectedOrder.currentStatus?.toLowerCase() === 'packed' || selectedOrder.status?.toLowerCase() === 'packed' ? (
+                      <div className="flex items-center text-green-600">
+                        <CheckCircle className="h-5 w-5 mr-2" />
+                        <span className="font-medium">Order Packed</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleMarkAsPacked(selectedOrder)}
+                        disabled={packingOrders.has(selectedOrder.id)}
+                        className="bg-[#5DAE49] text-white px-6 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {packingOrders.has(selectedOrder.id) ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            <span>Packing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Truck className="h-4 w-4" />
+                            <span>Mark as Packed</span>
+                          </>
+                        )}
+                      </button>
                     )}
                   </div>
                 </div>

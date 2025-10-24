@@ -16,8 +16,28 @@ import {
   Eye,
   CheckCircle,
   Truck,
-  Clock
+  Clock,
+  X,
+  Calendar,
+  DollarSign
 } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
 import { useAuth } from '../../contexts/AuthContext';
 import { ref, onValue, set as dbSet, get } from 'firebase/database';
 import { realtimeDb } from '../lib/Firebase';
@@ -203,6 +223,82 @@ const WholesalerDashboard = () => {
   const [showAddRetailer, setShowAddRetailer] = useState<boolean>(false);
   const [showAddOrder, setShowAddOrder] = useState<boolean>(false);
   const [showRetailerOrders, setShowRetailerOrders] = useState<boolean>(false);
+  const [showAnalytics, setShowAnalytics] = useState<boolean>(false);
+  const [retailerOrdersNotificationCount, setRetailerOrdersNotificationCount] = useState<number>(0);
+
+  // Track notification count even when modal is closed
+  useEffect(() => {
+    if (!user?.id && !user?.uid) return;
+
+    const wholesalerId = user.id || user.uid;
+    const viewedOrdersKey = `viewedOrders_${wholesalerId}`;
+    
+    // Get current viewed orders from localStorage
+    const getViewedOrders = () => {
+      const savedViewedOrders = localStorage.getItem(viewedOrdersKey);
+      let viewedOrdersSet = new Set<string>();
+      
+      if (savedViewedOrders) {
+        try {
+          const parsedViewedOrders = JSON.parse(savedViewedOrders);
+          viewedOrdersSet = new Set(parsedViewedOrders);
+        } catch (error) {
+          console.error('Error parsing viewed orders from localStorage:', error);
+        }
+      }
+      return viewedOrdersSet;
+    };
+
+    // Listen to orders and update notification count
+    const ordersRef = ref(realtimeDb, `orders/wholesaler/${wholesalerId}`);
+    const unsubscribe = onValue(ordersRef, (snapshot) => {
+      const ordersData = snapshot.val();
+      const viewedOrdersSet = getViewedOrders(); // Get fresh viewed orders each time
+      
+      if (ordersData) {
+        const ordersList = Object.values(ordersData) as any[];
+        const unviewedCount = ordersList.filter(order => !viewedOrdersSet.has(order.id)).length;
+        setRetailerOrdersNotificationCount(unviewedCount);
+      } else {
+        setRetailerOrdersNotificationCount(0);
+      }
+    });
+
+    // Listen for localStorage changes to update count when orders are viewed
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === viewedOrdersKey) {
+        // Trigger a re-evaluation by updating a dummy state or calling the listener manually
+        // Since we can't easily trigger the Firebase listener, we'll use a custom event
+        window.dispatchEvent(new CustomEvent('viewedOrdersChanged'));
+      }
+    };
+
+    const handleViewedOrdersChanged = () => {
+      // Force re-evaluation of notification count
+      const ordersRef = ref(realtimeDb, `orders/wholesaler/${wholesalerId}`);
+      get(ordersRef).then((snapshot) => {
+        const ordersData = snapshot.val();
+        const viewedOrdersSet = getViewedOrders();
+        
+        if (ordersData) {
+          const ordersList = Object.values(ordersData) as any[];
+          const unviewedCount = ordersList.filter(order => !viewedOrdersSet.has(order.id)).length;
+          setRetailerOrdersNotificationCount(unviewedCount);
+        } else {
+          setRetailerOrdersNotificationCount(0);
+        }
+      });
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('viewedOrdersChanged', handleViewedOrdersChanged);
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('viewedOrdersChanged', handleViewedOrdersChanged);
+    };
+  }, [user?.id, user?.uid]);
   
   // Order details modal states
   const [showOrderDetails, setShowOrderDetails] = useState<boolean>(false);
@@ -868,10 +964,15 @@ const WholesalerDashboard = () => {
               </button>
               <button 
                 onClick={() => setShowRetailerOrders(true)}
-                className="bg-[#5DAE49] text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center space-x-2"
+                className="bg-[#5DAE49] text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center space-x-2 relative"
               >
                 <Eye className="h-4 w-4" />
                 <span>View Retailer Orders</span>
+                {retailerOrdersNotificationCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
+                    {retailerOrdersNotificationCount > 99 ? '99+' : retailerOrdersNotificationCount}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -1173,7 +1274,10 @@ const WholesalerDashboard = () => {
                   <ShoppingCart className="h-4 w-4" />
                   <span>Create New Order</span>
                 </button>
-                <button className="w-full bg-gray-100 text-gray-700 p-3 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2">
+                <button 
+                  onClick={() => setShowAnalytics(true)}
+                  className="w-full bg-gray-100 text-gray-700 p-3 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2"
+                >
                   <BarChart3 className="h-4 w-4" />
                   <span>View Analytics</span>
                 </button>
@@ -1708,10 +1812,216 @@ const WholesalerDashboard = () => {
       {/* Retailer Orders View Modal */}
       {showRetailerOrders && (
         <RetailerOrdersView 
-          isOpen={showRetailerOrders}
           onClose={() => setShowRetailerOrders(false)}
-          wholesalerId={user?.id || ''}
+          onNotificationCountChange={setRetailerOrdersNotificationCount}
         />
+      )}
+
+      {/* Analytics Modal */}
+      {showAnalytics && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-2xl font-bold text-[#0D1B2A]">Business Analytics</h2>
+                <p className="text-gray-600">Comprehensive insights into your business performance</p>
+              </div>
+              <button
+                onClick={() => setShowAnalytics(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="h-6 w-6 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Analytics Content */}
+            <div className="flex-1 overflow-auto p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+                {/* Key Metrics Cards */}
+                <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-blue-100 text-sm">Total Revenue</p>
+                      <p className="text-2xl font-bold">₹{(recentOrders.reduce((sum, order) => sum + (order.amount || 0), 0)).toLocaleString()}</p>
+                      <p className="text-blue-100 text-sm">+12% from last month</p>
+                    </div>
+                    <DollarSign className="h-8 w-8 text-blue-200" />
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-green-100 text-sm">Total Orders</p>
+                      <p className="text-2xl font-bold">{recentOrders.length}</p>
+                      <p className="text-green-100 text-sm">+8% from last month</p>
+                    </div>
+                    <ShoppingCart className="h-8 w-8 text-green-200" />
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-purple-100 text-sm">Active Retailers</p>
+                      <p className="text-2xl font-bold">{new Set(recentOrders.map(order => order.retailer)).size}</p>
+                      <p className="text-purple-100 text-sm">+5% from last month</p>
+                    </div>
+                    <Users className="h-8 w-8 text-purple-200" />
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-orange-100 text-sm">Avg Order Value</p>
+                      <p className="text-2xl font-bold">₹{recentOrders.length > 0 ? Math.round(recentOrders.reduce((sum, order) => sum + (order.amount || 0), 0) / recentOrders.length).toLocaleString() : '0'}</p>
+                      <p className="text-orange-100 text-sm">+3% from last month</p>
+                    </div>
+                    <TrendingUp className="h-8 w-8 text-orange-200" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Charts Section */}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+                {/* Revenue Trend Chart */}
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <h3 className="text-lg font-bold text-[#0D1B2A] mb-4">Revenue Trend (Last 6 Months)</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={[
+                      { month: 'Jan', revenue: 45000, orders: 120 },
+                      { month: 'Feb', revenue: 52000, orders: 135 },
+                      { month: 'Mar', revenue: 48000, orders: 128 },
+                      { month: 'Apr', revenue: 61000, orders: 155 },
+                      { month: 'May', revenue: 58000, orders: 148 },
+                      { month: 'Jun', revenue: 67000, orders: 172 }
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip formatter={(value, name) => [name === 'revenue' ? `₹${value.toLocaleString()}` : value, name === 'revenue' ? 'Revenue' : 'Orders']} />
+                      <Area type="monotone" dataKey="revenue" stroke="#5DAE49" fill="#5DAE49" fillOpacity={0.3} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Order Status Distribution */}
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <h3 className="text-lg font-bold text-[#0D1B2A] mb-4">Order Status Distribution</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Delivered', value: recentOrders.filter(o => o.status === 'Delivered').length, color: '#10B981' },
+                          { name: 'Shipped', value: recentOrders.filter(o => o.status === 'Shipped').length, color: '#3B82F6' },
+                          { name: 'Packed', value: recentOrders.filter(o => o.status === 'Packed').length, color: '#8B5CF6' },
+                          { name: 'Pending', value: recentOrders.filter(o => o.status === 'Pending').length, color: '#F59E0B' },
+                          { name: 'Cancelled', value: recentOrders.filter(o => o.status === 'Cancelled').length, color: '#EF4444' }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={100}
+                        dataKey="value"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {[
+                          { name: 'Delivered', value: recentOrders.filter(o => o.status === 'Delivered').length, color: '#10B981' },
+                          { name: 'Shipped', value: recentOrders.filter(o => o.status === 'Shipped').length, color: '#3B82F6' },
+                          { name: 'Packed', value: recentOrders.filter(o => o.status === 'Packed').length, color: '#8B5CF6' },
+                          { name: 'Pending', value: recentOrders.filter(o => o.status === 'Pending').length, color: '#F59E0B' },
+                          { name: 'Cancelled', value: recentOrders.filter(o => o.status === 'Cancelled').length, color: '#EF4444' }
+                        ].map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Additional Charts */}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                {/* Top Products */}
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <h3 className="text-lg font-bold text-[#0D1B2A] mb-4">Top Selling Products</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={[
+                      { product: 'Rice', sales: 45, revenue: 22500 },
+                      { product: 'Wheat', sales: 38, revenue: 19000 },
+                      { product: 'Sugar', sales: 32, revenue: 16000 },
+                      { product: 'Oil', sales: 28, revenue: 14000 },
+                      { product: 'Pulses', sales: 25, revenue: 12500 }
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="product" />
+                      <YAxis />
+                      <Tooltip formatter={(value, name) => [name === 'revenue' ? `₹${value.toLocaleString()}` : value, name === 'revenue' ? 'Revenue' : 'Sales']} />
+                      <Bar dataKey="sales" fill="#5DAE49" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Monthly Comparison */}
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <h3 className="text-lg font-bold text-[#0D1B2A] mb-4">Monthly Performance Comparison</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={[
+                      { month: 'Jan', thisYear: 45000, lastYear: 38000 },
+                      { month: 'Feb', thisYear: 52000, lastYear: 42000 },
+                      { month: 'Mar', thisYear: 48000, lastYear: 45000 },
+                      { month: 'Apr', thisYear: 61000, lastYear: 48000 },
+                      { month: 'May', thisYear: 58000, lastYear: 52000 },
+                      { month: 'Jun', thisYear: 67000, lastYear: 55000 }
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} />
+                      <Legend />
+                      <Line type="monotone" dataKey="thisYear" stroke="#5DAE49" strokeWidth={3} name="This Year" />
+                      <Line type="monotone" dataKey="lastYear" stroke="#94A3B8" strokeWidth={2} name="Last Year" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Insights Section */}
+              <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="bg-blue-50 rounded-xl p-6">
+                  <div className="flex items-center mb-3">
+                    <TrendingUp className="h-6 w-6 text-blue-600 mr-2" />
+                    <h4 className="font-bold text-blue-900">Growth Insight</h4>
+                  </div>
+                  <p className="text-blue-800 text-sm">Your revenue has grown by 12% compared to last month. Keep up the excellent work!</p>
+                </div>
+
+                <div className="bg-green-50 rounded-xl p-6">
+                  <div className="flex items-center mb-3">
+                    <Users className="h-6 w-6 text-green-600 mr-2" />
+                    <h4 className="font-bold text-green-900">Customer Retention</h4>
+                  </div>
+                  <p className="text-green-800 text-sm">85% of your retailers placed repeat orders this month. Great customer satisfaction!</p>
+                </div>
+
+                <div className="bg-orange-50 rounded-xl p-6">
+                  <div className="flex items-center mb-3">
+                    <Package className="h-6 w-6 text-orange-600 mr-2" />
+                    <h4 className="font-bold text-orange-900">Inventory Alert</h4>
+                  </div>
+                  <p className="text-orange-800 text-sm">{lowStockItems.length} items are running low on stock. Consider restocking soon.</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
       )}
 
       {/* Order Details Modal */}

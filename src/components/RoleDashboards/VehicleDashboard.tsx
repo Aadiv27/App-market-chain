@@ -653,30 +653,30 @@ const VehicleDashboard = () => {
           transition={{ duration: 0.6 }}
           className="mb-8"
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-[#0D1B2A]">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex-1">
+              <h1 className="text-2xl sm:text-3xl font-bold text-[#0D1B2A]">
                 Welcome, {user?.name || 'Driver'}!
               </h1>
-              <p className="text-gray-600 flex items-center mt-1">
-                <Truck className="h-4 w-4 mr-1" />
+              <p className="text-gray-600 flex items-center mt-1 text-sm sm:text-base">
+                <Truck className="h-4 w-4 mr-1 flex-shrink-0" />
                 Vehicle: {user?.activeRole?.data?.vehicleNumber || 'JH01AB1234'}
               </p>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 sm:space-x-3 w-full sm:w-auto">
               {locationPermissionGranted ? (
-                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-lg flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <Navigation className="h-4 w-4" />
-                  <span>Live Location Active</span>
+                <div className="bg-green-50 border border-green-200 text-green-700 px-3 sm:px-4 py-2 rounded-lg flex items-center space-x-2 text-xs sm:text-sm flex-1 sm:flex-none">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0"></div>
+                  <Navigation className="h-4 w-4 flex-shrink-0" />
+                  <span className="whitespace-nowrap">Live Location Active</span>
                 </div>
               ) : (
                 <button
                   onClick={retryLocationPermission}
-                  className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-yellow-100 transition-colors"
+                  className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-3 sm:px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-yellow-100 transition-colors text-xs sm:text-sm flex-1 sm:flex-none"
                 >
-                  <AlertTriangle className="h-4 w-4" />
-                  <span>Enable Location</span>
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  <span className="whitespace-nowrap">Enable Location</span>
                 </button>
               )}
               <button className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2">
@@ -742,7 +742,7 @@ const VehicleDashboard = () => {
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="bg-white rounded-2xl shadow-lg p-6"
+                className="bg-white rounded-2xl shadow-lg p-4 sm:p-6"
               >
                 <div className="flex items-center justify-between mb-4">
                   <div className={`w-12 h-12 ${stat.color || 'bg-[#5DAE49]'} rounded-lg flex items-center justify-center`}>
@@ -762,20 +762,22 @@ const VehicleDashboard = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex space-x-1 bg-gray-100 rounded-lg p-1 mb-8">
+        <div className="flex flex-wrap sm:flex-nowrap gap-1 bg-gray-100 rounded-lg p-1 mb-8">
           <button
             onClick={() => setActiveTab('available')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 py-2 px-2 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === 'available'
                 ? 'bg-white text-[#0D1B2A] shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            Available ({availableDeliveries.length})
+            <span className="hidden sm:inline">Available </span>
+            <span className="sm:hidden">Avail </span>
+            ({availableDeliveries.length})
           </button>
           <button
             onClick={() => setActiveTab('deliveries')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 py-2 px-2 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === 'deliveries'
                 ? 'bg-white text-[#0D1B2A] shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
@@ -785,7 +787,7 @@ const VehicleDashboard = () => {
           </button>
           <button
             onClick={() => setActiveTab('returns')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 py-2 px-2 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === 'returns'
                 ? 'bg-white text-[#0D1B2A] shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
@@ -795,27 +797,31 @@ const VehicleDashboard = () => {
           </button>
           <button
             onClick={() => setActiveTab('completed')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 py-2 px-2 sm:px-4 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === 'completed'
                 ? 'bg-white text-[#0D1B2A] shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            Completed ({completedDeliveries.length})
+            <span className="hidden sm:inline">Completed </span>
+            <span className="sm:hidden">Done </span>
+            ({completedDeliveries.length})
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 xl:gap-8">
           {/* Main Content */}
-          <div className="lg:col-span-2">
+          <div className="xl:col-span-2">
             {activeTab === 'available' && (
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
-                className="bg-white rounded-2xl shadow-lg p-6"
+                className="bg-white rounded-2xl shadow-lg p-4 sm:p-6"
               >
-                <h3 className="text-lg font-bold text-[#0D1B2A] mb-6">Available Deliveries</h3>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-bold text-[#0D1B2A]">Available Deliveries</h3>
+                </div>
                 <div className="space-y-4">
                   {availableDeliveries.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
@@ -825,62 +831,70 @@ const VehicleDashboard = () => {
                     </div>
                   ) : (
                     availableDeliveries.map((delivery: AvailableDelivery) => (
-                      <div key={delivery.id} className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-300 bg-gradient-to-r from-green-50 to-blue-50">
+                      <div key={delivery.id} className="border border-gray-200 rounded-xl p-4 sm:p-6 hover:shadow-lg transition-all duration-300 bg-gradient-to-r from-green-50 to-blue-50">
                         {/* Header with Order Info */}
-                        <div className="flex items-start justify-between mb-4">
-                          <div>
-                            <h4 className="font-bold text-[#0D1B2A] mb-1">Order #{delivery.orderId}</h4>
-                            <p className="text-sm text-gray-600">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between mb-4 gap-3">
+                          <div className="flex-1">
+                            <h4 className="font-bold text-[#0D1B2A] mb-1 text-lg sm:text-xl">Order #{delivery.orderId}</h4>
+                            <p className="text-xs sm:text-sm text-gray-600">
                               Packed: {new Date(delivery.packedAt).toLocaleDateString()} at {new Date(delivery.packedAt).toLocaleTimeString()}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-medium mb-1">
+                          <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-1 w-full sm:w-auto">
+                            <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap">
                               ₹{delivery.deliveryCost} Delivery Fee
                             </div>
-                            <div className="text-sm text-gray-600">{delivery.distance}km</div>
+                            <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">{delivery.distance}km</div>
                           </div>
                         </div>
 
                         {/* Wholesaler Info */}
-                        <div className="bg-yellow-50 rounded-lg p-4 mb-4">
-                          <h5 className="font-semibold text-yellow-800 mb-2 flex items-center">
-                            <Package className="h-4 w-4 mr-2" />
+                        <div className="bg-yellow-50 rounded-lg p-3 sm:p-4 mb-4">
+                          <h5 className="font-semibold text-yellow-800 mb-3 flex items-center text-sm sm:text-base">
+                            <Package className="h-4 w-4 mr-2 flex-shrink-0" />
                             Pickup from Wholesaler
                           </h5>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                            <div>
-                              <p><strong>Name:</strong> {delivery.wholesaler.name}</p>
-                              <p><strong>Shop:</strong> {delivery.wholesaler.shopName}</p>
+                          <div className="space-y-2 text-xs sm:text-sm">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                              <div className="space-y-1">
+                                <p><strong>Name:</strong> {delivery.wholesaler.name}</p>
+                                <p><strong>Shop:</strong> {delivery.wholesaler.shopName}</p>
+                              </div>
+                              <div className="space-y-1">
+                                <p><strong>Phone:</strong> {delivery.wholesaler.phone || 'Phone not available'}</p>
+                              </div>
                             </div>
-                            <div>
-                              <p><strong>Phone:</strong> {delivery.wholesaler.phone}</p>
+                            <div className="pt-1">
                               <p><strong>Address:</strong> {delivery.wholesaler.address}</p>
                             </div>
                           </div>
                         </div>
 
                         {/* Retailer Info */}
-                        <div className="bg-blue-50 rounded-lg p-4 mb-4">
-                          <h5 className="font-semibold text-blue-800 mb-2 flex items-center">
-                            <MapPin className="h-4 w-4 mr-2" />
+                        <div className="bg-blue-50 rounded-lg p-3 sm:p-4 mb-4">
+                          <h5 className="font-semibold text-blue-800 mb-3 flex items-center text-sm sm:text-base">
+                            <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
                             Deliver to Retailer
                           </h5>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                            <div>
-                              <p><strong>Name:</strong> {delivery.retailer.name}</p>
-                              <p><strong>Shop:</strong> {delivery.retailer.shopName}</p>
+                          <div className="space-y-2 text-xs sm:text-sm">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                              <div className="space-y-1">
+                                <p><strong>Name:</strong> {delivery.retailer.name}</p>
+                                <p><strong>Shop:</strong> {delivery.retailer.shopName}</p>
+                              </div>
+                              <div className="space-y-1">
+                                <p><strong>Phone:</strong> {delivery.retailer.phone || 'Phone not available'}</p>
+                              </div>
                             </div>
-                            <div>
-                              <p><strong>Phone:</strong> {delivery.retailer.phone}</p>
+                            <div className="pt-1">
                               <p><strong>Address:</strong> {delivery.retailer.address}</p>
                             </div>
                           </div>
                         </div>
 
                         {/* Order Details */}
-                        <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div className="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4">
+                          <div className="space-y-3 text-xs sm:text-sm">
                             <div>
                               <p><strong>Products:</strong> {
                                 typeof delivery.items === 'string' 
@@ -889,28 +903,37 @@ const VehicleDashboard = () => {
                                     ? JSON.stringify(delivery.items).replace(/[{}"\[\]]/g, '').replace(/,/g, ', ')
                                     : 'Product details not available'
                               }</p>
-                              <p><strong>Order Value:</strong> ₹{delivery.amount}</p>
                             </div>
-                            <div>
-                              <p><strong>Distance:</strong> {delivery.distance}km</p>
-                              <p><strong>Your Earnings:</strong> ₹{delivery.deliveryCost}</p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 border-t border-gray-200">
+                              <div>
+                                <p><strong>Order Value:</strong></p>
+                                <p className="text-green-600 font-semibold">₹{delivery.amount}</p>
+                              </div>
+                              <div>
+                                <p><strong>Distance:</strong></p>
+                                <p className="text-blue-600 font-semibold">{delivery.distance}km</p>
+                              </div>
+                              <div className="col-span-2 sm:col-span-1">
+                                <p><strong>Your Earnings:</strong></p>
+                                <p className="text-green-600 font-semibold text-lg">₹{delivery.deliveryCost}</p>
+                              </div>
                             </div>
                           </div>
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                             <button 
                               onClick={() => callWholesaler(delivery.wholesaler.phone, delivery.wholesaler.name)}
-                              className="bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors flex items-center space-x-2"
+                              className="bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2 text-sm sm:text-base"
                             >
                               <Phone className="h-4 w-4" />
                               <span>Call Wholesaler</span>
                             </button>
                             <button 
                               onClick={() => callRetailer(delivery.retailer.phone, delivery.retailer.name)}
-                              className="bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors flex items-center space-x-2"
+                              className="bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center space-x-2 text-sm sm:text-base"
                             >
                               <Phone className="h-4 w-4" />
                               <span>Call Retailer</span>
@@ -918,7 +941,7 @@ const VehicleDashboard = () => {
                           </div>
                           <button 
                             onClick={() => acceptDelivery(delivery.id)}
-                            className="bg-[#5DAE49] text-white py-2 px-6 rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center space-x-2"
+                            className="bg-[#5DAE49] text-white py-3 px-6 rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center justify-center space-x-2 text-sm sm:text-base"
                           >
                             <CheckCircle className="h-4 w-4" />
                             <span>Accept Delivery</span>
@@ -936,7 +959,7 @@ const VehicleDashboard = () => {
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
-                className="bg-white rounded-2xl shadow-lg p-6"
+                className="bg-white rounded-2xl shadow-lg p-4 sm:p-6"
               >
                 <h3 className="text-lg font-bold text-[#0D1B2A] mb-6">Active Deliveries</h3>
                 <div className="space-y-4">
@@ -1004,7 +1027,7 @@ const VehicleDashboard = () => {
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
-                className="bg-white rounded-2xl shadow-lg p-6"
+                className="bg-white rounded-2xl shadow-lg p-4 sm:p-6"
               >
                 <h3 className="text-lg font-bold text-[#0D1B2A] mb-6 flex items-center">
                   <AlertTriangle className="h-5 w-5 mr-2 text-orange-500" />
@@ -1065,7 +1088,7 @@ const VehicleDashboard = () => {
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
-                className="bg-white rounded-2xl shadow-lg p-6"
+                className="bg-white rounded-2xl shadow-lg p-4 sm:p-6"
               >
                 <h3 className="text-lg font-bold text-[#0D1B2A] mb-6">Today's Completed Deliveries</h3>
                 <div className="space-y-3">
